@@ -1,2 +1,3 @@
 pyTelegramBotAPI
-fpdf
+fpdf2
+matplotlib
