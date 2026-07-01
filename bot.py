@@ -1,31 +1,38 @@
 import telebot
 from fpdf import FPDF
-import matplotlib.pyplot as plt
 import os
+import requests
+import urllib.parse
 
 # Telegram Bot Token setup
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# UPDATE 1: Image ke aas-paas ka extra space remove kiya gaya hai
+# UPDATE: Matplotlib hata kar QuickChart LaTeX API ka use
 def text_to_math_image(text_line, filename):
-    fig = plt.figure()
-    # Font size thoda bada rakha hai taaki clear dikhe
-    fig.text(0, 0, text_line, fontsize=14, va='bottom', ha='left')
+    # $ sign hata kar sirf pure equation nikalna
+    clean_math = text_line.replace('$', '').strip()
     
-    # pad_inches=0.02 se extra transparent space cut ho jayega
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0.02, dpi=300, transparent=True)
-    plt.close(fig)
+    # Text ko URL ke liye safe format mein encode karna
+    encoded_math = urllib.parse.quote(clean_math)
+    
+    # QuickChart LaTeX API (Yeh har tarah ke math function support karti hai)
+    url = f"https://quickchart.io/latex?formula={encoded_math}&dpi=300&background=FFFFFF"
+    
+    # Image download karke save karna
+    response = requests.get(url, timeout=10)
+    if response.status_code == 200:
+        with open(filename, 'wb') as f:
+            f.write(response.content)
+    else:
+        raise Exception("API se equation render nahi ho payi.")
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     welcome_text = (
         "Welcome to Advanced Maths PDF Bot! 🧮📄\n\n"
-        "Aap mujhe normal text ke sath-sath Mathematical Equations bhi bhej sakte hain.\n\n"
-        "💡 **Maths Equation likhne ka tarika:**\n"
-        "Apni equation ko dollar symbols `$` ke beech mein likhein.\n\n"
-        "**Example:**\n"
-        "Solve this: $f(x) = \\frac{x^2 + 2x}{x - 1}$"
+        "Aap mujhe normal text aur equations bhej sakte hain.\n"
+        "**Note:** Math equation ko apni ek alag line mein `$` ke andar likhein."
     )
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
@@ -34,7 +41,7 @@ def process_message(message):
     chat_id = message.chat.id
     raw_text = message.text
 
-    bot.reply_to(message, "PDF generate ho raha hai, please wait... ⏳")
+    bot.reply_to(message, "Advanced PDF generate ho raha hai, please wait... ⏳")
 
     pdf = FPDF()
     pdf.add_page()
@@ -50,13 +57,12 @@ def process_message(message):
                 text_to_math_image(line, img_name)
                 temp_files.append(img_name)
                 
-                # UPDATE 2: w=180 hata kar h=10 kar diya gaya hai!
-                # Isse height text ke barabar ho jayegi aur width apne aap adjust hogi.
+                # Image ko PDF mein lagana
                 pdf.image(img_name, x=10, h=10)
-                pdf.ln(2) 
+                pdf.ln(2)
             else:
                 if line.strip() == "":
-                    pdf.ln(5) 
+                    pdf.ln(5)
                 else:
                     pdf.multi_cell(0, 8, txt=line)
                     pdf.ln(2)
@@ -77,5 +83,5 @@ def process_message(message):
         for img in temp_files:
             if os.path.exists(img): os.remove(img)
 
-print("Bot with fixed math size is running...")
+print("Bot with Powerful LaTeX API is running...")
 bot.polling(none_stop=True)
